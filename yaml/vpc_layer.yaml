@@ -111,12 +111,12 @@ Resources:
       RouteTableId: !Ref MyPriRt34
       SubnetId: !Ref MyPriSn4
 
-  # MyPriRtDefRoute:
-  #   Type: AWS::EC2::Route
-  #   Properties:
-  #     RouteTableId: !Ref MyPriRt34
-  #     DestinationCidrBlock: 0.0.0.0/0
-  #     GatewayId: !Ref NatIgw
+  MyPriRtDefRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref MyPriRt34
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NatInstance
 
 # Database Subnet
   MyDbSn5:
@@ -159,12 +159,128 @@ Resources:
       RouteTableId: !Ref MyDbRt56
       SubnetId: !Ref MyDbSn6
 
-  # Nat instance & security group
+  # Nat instance & Security group
+
+  AlbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref MyVpc
+      GroupDescription: ALB Security Group
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: 172.16.0.0/24
+      Tags:
+        - Key : Name
+          Value : my-alb-sg"
+
+  AlbSgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt AlbSg.GroupId
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: 0.0.0.0/0
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 0.0.0.0/0
+
+  WebSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref MyVpc
+      GroupDescription: Web Instance Instance Security Group
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: 172.16.0.0/24
+      Tags:
+        - Key : Name
+          Value : my-web-sg"
+
+  WebSgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt WebSg.GroupId
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref SeoulAlbSg
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref SeoulAlbSg
+      IpProtocol: icmp
+      FromPort: -1
+      ToPort: -1
+      CidrIp: 172.16.0.0/16
+
+  OpenVPNSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref MyVpc
+      GroupDescription: OpenVPN Instance Security Group
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: 172.16.0.0/24
+      Tags:
+        - Key : Name
+          Value : my-openvpn-sg"
+
+  OpenVPNSgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt OpenVPNSg.GroupId
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: 0.0.0.0/0
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+      IpProtocol: tcp
+      FromPort: 943
+      ToPort: 943
+      CidrIp: 0.0.0.0/0
+      IpProtocol: tcp
+      FromPort: 945
+      ToPort: 945
+      CidrIp: 0.0.0.0/0
+      IpProtocol: udp
+      FromPort: 1194
+      ToPort: 1194
+      CidrIp: 0.0.0.0/0
+
+  NatInstanceSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref MyVpc
+      GroupDescription: Seoul Nat Instance Security Group
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: 172.16.0.0/24
+      Tags:
+        - Key : Name
+          Value : my-nat-instance-sg"
+
+  NatInstanceSgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt NatInstanceSg.GroupId
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: 0.0.0.0/0
+      IpProtocol: icmp
+      FromPort: -1
+      ToPort: -1
+      CidrIp: 172.16.0.0/16
 
   NatInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [AmiMap, !Ref "AWS::Region", Ami]
+      ImageId: ami-07d737d4d8119ad79
       InstanceType: t2.micro
       # KeyName: !Ref KeyPair
       NetworkInterfaces:
@@ -172,11 +288,11 @@ Resources:
           DeviceIndex: 0
           GroupSet: 
             - !Ref NatInstanceSg
-          SubnetId: !Ref PubSn1
+          SubnetId: !Ref MyPubSn1
       SourceDestCheck: false
       Tags:
         - Key : Name
-          Value : !Sub "${ProjectName}-${RegionName}-nat-instance"
+          Value : my-nat-instance"
       UserData:
         Fn::Base64: |
           #!/bin/bash
@@ -194,30 +310,40 @@ Resources:
           service iptables save
 
 # Outputs
-  Outputs:
-    VpcId:
-      Description: VPC ID
-      Value: !Ref MyVpc
-      Export:
-        Name: VpcId
-    PubSn1Id:
-      Description: Public Subnet 1 ID
-      Value: !Ref PubSn1
-      Export:
-        Name: PubSn1Id
-    PubSn2Id:
-      Description: Public Subnet 2 ID
-      Value: !Ref PubSn2
-      Export:
-        Name: PubSn2Id
-    WebSn3Id:
-      Description: Private Subnet 3 ID
-      Value: !Ref WebSn3
-      Export:
-        Name: WebSn3Id
-    WebSn4Id:
-      Description: Private Subnet 4 ID
-      Value: !Ref WebSn4
-      Export:
-        Name: WebSn4Id
+Outputs:
+  MyVpcId:
+    Description: VPC ID
+    Value: !Ref MyVpc
+    Export:
+      Name: MyVpcId
+  MyPubSn1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref MyPubSn1
+    Export:
+      Name: MyPubSn1Id
+  MyPubSn2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref MyPubSn2
+    Export:
+      Name: MyPubSn2Id
+  MyPriSn3Id:
+    Description: Private Subnet 3 ID
+    Value: !Ref MyPriSn3
+    Export:
+      Name: MyPriSn3Id
+  MuPriSn4Id:
+    Description: Private Subnet 4 ID
+    Value: !Ref MyPriSn4
+    Export:
+      Name: MyPriSn4Id
+  MyDbSn5Id:
+    Description: Private Subnet 5 ID
+    Value: !Ref MyDbSn5
+    Export:
+      Name: MyDbSn5Id
+  MyDbSn6Id:
+    Description: Private Subnet 6 ID
+    Value: !Ref MyDbSn6
+    Export:
+      Name: MyDbSn6Id
 ...
