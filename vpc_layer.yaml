@@ -1,0 +1,223 @@
+---
+# VPC & Internet Gateway
+Resources:
+  MyVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+     CidrBlock: 172.16.0.0/16
+     Tags:
+        - Key: Name
+          Value: my-vpc
+
+  MyIgw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: my-igw
+
+  MyIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyIgw
+      VpcId: !Ref MyVpc
+
+# Public Subnet
+  MyPubSn1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVpc
+      AvailabilityZone: ap-northeast-2a
+      CidrBlock: 172.16.1.0/24
+      Tags:
+        - Key: Name
+          Value: my-pub-sn1
+
+  MyPubSn2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVpc
+      AvailabilityZone: ap-northeast-2c
+      CidrBlock: 172.16.2.0/24
+      Tags:
+        - Key: Name
+          Value: my-pub-sn2
+
+  MyPubRt12:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+        - Key: Name
+          Value: my-pub-rt12
+
+  MyPubRtAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyPubRt12
+      SubnetId: !Ref MyPubSn1
+
+  MyPubRtAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyPubRt12
+      SubnetId: !Ref MyPubSn2
+
+  MyPubRtDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref MyPubRt12
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyIgw
+
+# Private Subnet
+  MyPriSn3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVpc
+      AvailabilityZone: ap-northeast-2a
+      CidrBlock: 172.16.3.0/24
+      Tags:
+        - Key: Name
+          Value: my-pri-sn3
+
+  MyPriSn4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVpc
+      AvailabilityZone: ap-northeast-2c
+      CidrBlock: 172.16.4.0/24
+      Tags:
+        - Key: Name
+          Value: my-pri-sn4
+
+  MyPriRt34:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+        - Key: Name
+          Value: my-pri-rt34
+
+  MyPriRtAssoc3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyPriRt34
+      SubnetId: !Ref MyPriSn3
+
+  MyPriRtAssoc4:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyPriRt34
+      SubnetId: !Ref MyPriSn4
+
+  # MyPriRtDefRoute:
+  #   Type: AWS::EC2::Route
+  #   Properties:
+  #     RouteTableId: !Ref MyPriRt34
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     GatewayId: !Ref NatIgw
+
+# Database Subnet
+  MyDbSn5:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVpc
+      AvailabilityZone: ap-northeast-2a
+      CidrBlock: 172.16.5.0/24
+      Tags:
+        - Key: Name
+          Value: my-db-sn5
+
+  MyDbSn6:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVpc
+      AvailabilityZone: ap-northeast-2c
+      CidrBlock: 172.16.6.0/24
+      Tags:
+        - Key: Name
+          Value: my-db-sn6
+
+  MyDbRt56:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+        - Key: Name
+          Value: my-db-rt-56
+
+  MyDbRtAssoc5:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyDbRt56
+      SubnetId: !Ref MyDbSn5
+
+  MyDbRtAssoc6:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyDbRt56
+      SubnetId: !Ref MyDbSn6
+
+  # Nat instance & security group
+
+  NatInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [AmiMap, !Ref "AWS::Region", Ami]
+      InstanceType: t2.micro
+      # KeyName: !Ref KeyPair
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet: 
+            - !Ref NatInstanceSg
+          SubnetId: !Ref PubSn1
+      SourceDestCheck: false
+      Tags:
+        - Key : Name
+          Value : !Sub "${ProjectName}-${RegionName}-nat-instance"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          echo "p@ssw0rd" | passwd --stdin root
+          sed -i "s/^#PermitRootLogin yes/PermitRootLogin yes/g" /etc/ssh/sshd_config
+          sed -i "s/^PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config
+          systemctl restart sshd
+          echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+          sysctl -p /etc/sysctl.conf
+          yum install -y iptables-services
+          systemctl start iptables
+          systemctl enable iptables
+          iptables -F
+          iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+          service iptables save
+
+# Outputs
+  Outputs:
+    VpcId:
+      Description: VPC ID
+      Value: !Ref MyVpc
+      Export:
+        Name: VpcId
+    PubSn1Id:
+      Description: Public Subnet 1 ID
+      Value: !Ref PubSn1
+      Export:
+        Name: PubSn1Id
+    PubSn2Id:
+      Description: Public Subnet 2 ID
+      Value: !Ref PubSn2
+      Export:
+        Name: PubSn2Id
+    WebSn3Id:
+      Description: Private Subnet 3 ID
+      Value: !Ref WebSn3
+      Export:
+        Name: WebSn3Id
+    WebSn4Id:
+      Description: Private Subnet 4 ID
+      Value: !Ref WebSn4
+      Export:
+        Name: WebSn4Id
+...
