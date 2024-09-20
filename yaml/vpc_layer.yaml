@@ -171,7 +171,7 @@ Resources:
           CidrIp: 172.16.0.0/24
       Tags:
         - Key : Name
-          Value : my-alb-sg"
+          Value : my-alb-sg
 
   AlbSgIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -196,7 +196,7 @@ Resources:
           CidrIp: 172.16.0.0/24
       Tags:
         - Key : Name
-          Value : my-web-sg"
+          Value : my-web-sg
 
   WebSgIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -225,7 +225,7 @@ Resources:
           CidrIp: 172.16.0.0/24
       Tags:
         - Key : Name
-          Value : my-openvpn-sg"
+          Value : my-openvpn-sg
 
   OpenVPNSgIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -262,7 +262,7 @@ Resources:
           CidrIp: 172.16.0.0/24
       Tags:
         - Key : Name
-          Value : my-nat-instance-sg"
+          Value : my-nat-instance-sg
 
   NatInstanceSgIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -292,7 +292,7 @@ Resources:
       SourceDestCheck: false
       Tags:
         - Key : Name
-          Value : my-nat-instance"
+          Value : my-nat-instance
       UserData:
         Fn::Base64: |
           #!/bin/bash
